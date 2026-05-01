@@ -10,46 +10,13 @@ type Props = {
   searchParams: Promise<{ v_id?: string }>
 }
 
+// Enable dynamic rendering to prevent build-time data fetching
+export const dynamic = 'force-dynamic'
+
 export async function generateStaticParams() {
-  try {
-    const countryCodes = await listRegions().then((regions) =>
-      regions?.map((r) => r.countries?.map((c) => c.iso_2)).flat()
-    )
-
-    if (!countryCodes) {
-      return []
-    }
-
-    const promises = countryCodes.map(async (country) => {
-      const { response } = await listProducts({
-        countryCode: country,
-        queryParams: { limit: 100, fields: "handle" },
-      })
-
-      return {
-        country,
-        products: response.products,
-      }
-    })
-
-    const countryProducts = await Promise.all(promises)
-
-    return countryProducts
-      .flatMap((countryData) =>
-        countryData.products.map((product) => ({
-          countryCode: countryData.country,
-          handle: product.handle,
-        }))
-      )
-      .filter((param) => param.handle)
-  } catch (error) {
-    console.error(
-      `Failed to generate static paths for product pages: ${
-        error instanceof Error ? error.message : "Unknown error"
-      }.`
-    )
-    return []
-  }
+  // Return empty array to prevent build-time data fetching
+  // Pages will be rendered dynamically at runtime when backend is available
+  return []
 }
 
 function getImagesForVariant(
