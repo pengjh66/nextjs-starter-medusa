@@ -22,6 +22,8 @@ export const listProducts = async ({
   nextPage: number | null
   queryParams?: HttpTypes.FindParams & HttpTypes.StoreProductListParams
 }> => {
+  console.log('[listProducts] Called with:', { pageParam, countryCode, regionId, queryParams })
+  
   if (!countryCode && !regionId) {
     throw new Error("Country code or region ID is required")
   }
@@ -33,17 +35,22 @@ export const listProducts = async ({
   let region: HttpTypes.StoreRegion | undefined | null
 
   if (countryCode) {
+    console.log('[listProducts] Getting region for countryCode:', countryCode)
     region = await getRegion(countryCode)
   } else {
+    console.log('[listProducts] Retrieving region by ID:', regionId)
     region = await retrieveRegion(regionId!)
   }
 
   if (!region) {
+    console.error('[listProducts] No region found, returning empty products')
     return {
       response: { products: [], count: 0 },
       nextPage: null,
     }
   }
+
+  console.log('[listProducts] Region obtained:', { id: region.id, name: region.name })
 
   const headers = {
     ...(await getAuthHeaders()),
@@ -53,36 +60,62 @@ export const listProducts = async ({
     ...(await getCacheOptions("products")),
   }
 
-  return sdk.client
-    .fetch<{ products: HttpTypes.StoreProduct[]; count: number }>(
-      `/store/products`,
-      {
-        method: "GET",
-        query: {
-          limit,
-          offset,
-          region_id: region?.id,
-          fields:
-            "*variants.calculated_price,+variants.inventory_quantity,*variants.images,+metadata,+tags,",
-          ...queryParams,
-        },
-        headers,
-        next,
-        cache: "force-cache",
-      }
-    )
-    .then(({ products, count }) => {
-      const nextPage = count > offset + limit ? pageParam + 1 : null
+  console.log('[listProducts] Fetching from API with query:', {
+    limit,
+    offset,
+    region_id: region?.id,
+  })
 
-      return {
-        response: {
-          products,
-          count,
-        },
-        nextPage: nextPage,
-        queryParams,
-      }
+  try {
+    const result = await sdk.client
+      .fetch<{ products: HttpTypes.StoreProduct[]; count: number }>(
+        `/store/products`,
+        {
+          method: "GET",
+          query: {
+            limit,
+            offset,
+            region_id: region?.id,
+            fields:
+              "*variants.calculated_price,+variants.inventory_quantity,*variants.images,+metadata,+tags,",
+            ...queryParams,
+          },
+          headers,
+          next,
+          cache: "force-cache",
+        }
+      )
+      .then(({ products, count }) => {
+        console.log('[listProducts] API response received:', { count, productsLength: products?.length })
+        
+        const nextPage = count > offset + limit ? pageParam + 1 : null
+
+        return {
+          response: {
+            products,
+            count,
+          },
+          nextPage: nextPage,
+          queryParams,
+        }
+      })
+    
+    console.log('[listProducts] Returning result with', result.response.products.length, 'products')
+    return result
+  } catch (error: any) {
+    console.error('[listProducts] API fetch error:', {
+      message: error.message,
+      stack: error.stack,
+      response: error.response,
     })
+    
+    // Return empty products array instead of crashing
+    return {
+      response: { products: [], count: 0 },
+      nextPage: null,
+      queryParams,
+    }
+  }
 }
 
 /**
@@ -104,8 +137,11 @@ export const listProductsWithSort = async ({
   nextPage: number | null
   queryParams?: HttpTypes.FindParams & HttpTypes.StoreProductParams
 }> => {
+  console.log('[listProductsWithSort] Called with:', { page, sortBy, countryCode })
+  
   const limit = queryParams?.limit || 12
 
+  console.log('[listProductsWithSort] Calling listProducts...')
   const {
     response: { products, count },
   } = await listProducts({
@@ -117,13 +153,20 @@ export const listProductsWithSort = async ({
     countryCode,
   })
 
+  console.log('[listProductsWithSort] Products received:', { count, productsLength: products.length })
+  console.log('[listProductsWithSort] Sorting products by:', sortBy)
+  
   const sortedProducts = sortProducts(products, sortBy)
+
+  console.log('[listProductsWithSort] Products sorted successfully')
 
   const pageParam = (page - 1) * limit
 
   const nextPage = count > pageParam + limit ? pageParam + limit : null
 
   const paginatedProducts = sortedProducts.slice(pageParam, pageParam + limit)
+
+  console.log('[listProductsWithSort] Returning paginated products:', paginatedProducts.length)
 
   return {
     response: {

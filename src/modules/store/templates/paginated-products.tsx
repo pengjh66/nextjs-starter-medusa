@@ -29,6 +29,8 @@ export default async function PaginatedProducts({
   productsIds?: string[]
   countryCode: string
 }) {
+  console.log('[PaginatedProducts] Starting with:', { sortBy, page, countryCode })
+  
   const queryParams: PaginatedProductsParams = {
     limit: 12,
   }
@@ -49,11 +51,16 @@ export default async function PaginatedProducts({
     queryParams["order"] = "created_at"
   }
 
+  console.log('[PaginatedProducts] Fetching region for:', countryCode)
   const region = await getRegion(countryCode)
 
   if (!region) {
+    console.error('[PaginatedProducts] No region found for countryCode:', countryCode)
     return null
   }
+
+  console.log('[PaginatedProducts] Region found:', region.id, region.name)
+  console.log('[PaginatedProducts] Fetching products with params:', queryParams)
 
   let {
     response: { products, count },
@@ -63,6 +70,14 @@ export default async function PaginatedProducts({
     sortBy,
     countryCode,
   })
+
+  console.log('[PaginatedProducts] Products fetched:', { count, productsLength: products.length })
+  console.log('[PaginatedProducts] First product sample:', products[0] ? {
+    id: products[0].id,
+    title: products[0].title,
+    variantsCount: products[0].variants?.length,
+    firstVariantHasPrice: products[0].variants?.[0]?.calculated_price ? 'yes' : 'no'
+  } : 'no products')
 
   const totalPages = Math.ceil(count / PRODUCT_LIMIT)
 
